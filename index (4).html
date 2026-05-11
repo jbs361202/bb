@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>충북 날씨 실시간 대시보드</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d1b2a;
+            --card-color: #1b263b;
+            --text-main: #e0e1dd;
+            --accent-blue: #00b4d8;
+            --accent-green: #06d6a0;
+            --accent-red: #ef476f;
+            --accent-yellow: #ffd166;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Pretendard', sans-serif;
+            margin: 0; padding: 20px;
+            line-height: 1.6;
+        }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { font-size: 2rem; margin-bottom: 10px; color: var(--accent-blue); }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+            max-width: 1400px; margin: 0 auto;
+        }
+        .chart-card {
+            background: var(--card-color);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease;
+        }
+        .chart-card:hover { transform: translateY(-5,px); }
+        .full-width { grid-column: span 2; }
+        
+        .loading { 
+            position: fixed; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%);
+            text-align: center; font-size: 1.5rem; 
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .full-width { grid-column: span 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>충청북도 기상 데이터 실시간 대시보드</h1>
+    <p style="color: #778da9;">기상청 ASOS 일자료 (Open API 15029361/v1)</p>
+</div>
+
+<div id="loader" class="loading">
+    <div style="margin-bottom: 20px;">📡 데이터를 불러오는 중입니다...</div>
+    <small style="color: var(--accent-blue);">API 응답 속도에 따라 1~3초 소요될 수 있습니다.</small>
+</div>
+
+<div class="dashboard-grid" id="dashboard" style="display: none;">
+    <div class="chart-card full-width" id="temp-chart"></div>
+    <div class="chart-card" id="rain-chart"></div>
+    <div class="chart-card" id="hum-wind-chart"></div>
+</div>
+
+<script>
+    // ────────────────────────────────────────────────────────
+    // 1. 설정 (사용자 키 입력)
+    // ────────────────────────────────────────────────────────
+    const API_KEY = "9aeb4132fb09a2571a255a72b641bf08fc287c3db0865fb83b302ec94ec457f3"; 
+    const ENDPOINT = "uddi:f052ed65-fd7a-4668-b7a5-f4bae187d58c_201810192136";
+    
+    // 공공데이터 API URL (인코딩된 키를 그대로 사용하기 위해 encodeURIComponent 방지 처리)
+    const URL = `https://api.odcloud.kr/api/15029361/v1/${ENDPOINT}?page=1&perPage=50&serviceKey=${API_KEY}`;
+
+    async function fetchData() {
+        try {
+            const response = await fetch(URL);
+            
+            if (!response.ok) throw new Error(`HTTP 에러! 상태: ${response.status}`);
+            
+            const json = await response.json();
+            
+            if (!json.data || json.data.length === 0) {
+                throw new Error("데이터가 비어있습니다. API 키 권한을 확인하세요.");
+            }
+
+            renderDashboard(json.data);
+            
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'grid';
+        } catch (error) {
+            console.error("데이터 로드 에러:", error);
+            document.getElementById('loader').innerHTML = `
+                <div style="color: var(--accent-red);">
+                    <h3>⚠️ 로딩 실패</h3>
+                    <p>${error.message}</p>
+                    <small>인증키가 유효한지, 혹은 CORS 제한이 있는지 확인이 필요합니다.</small>
+                </div>`;
+        }
+    }
+
+    function renderDashboard(data) {
+        // 데이터 정렬 (날짜순)
+        data.sort((a, b) => new Date(a["일시"]) - new Date(b["일시"]));
+
+        const dates = data.map(d => d["일시"]);
+        const avgTemp = data.map(d => parseFloat(d["평균기온(°C)"]));
+        const maxTemp = data.map(d => parseFloat(d["최고기온(°C)"]));
+        const minTemp = data.map(d => parseFloat(d["최저기온(°C)"]));
+        const rains = data.map(d => parseFloat(d["일강수량(mm)"] || 0));
+        const hums = data.map(d => parseFloat(d["평균습도(%rh)"]));
+        const winds = data.map(d => parseFloat(d["평균풍속(m/s)"]));
+
+        const layoutBase = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#e0e1dd', family: 'Pretendard' },
+            xaxis: { gridcolor: '#415a77', linecolor: '#415a77', tickformat: '%m-%d' },
+            yaxis: { gridcolor: '#415a77', linecolor: '#415a77', zerolinecolor: '#778da9' },
+            margin: { t: 60, b: 40, l: 50, r: 50 },
+            hovermode: 'x unified'
+        };
+
+        // 1. 기온 그래프 (메인)
+        Plotly.newPlot('temp-chart', [
+            { x: dates, y: maxTemp, name: '최고', type: 'scatter', mode: 'lines+markers', line: {color: '#ef476f', width: 1}, marker: {size: 4} },
+            { x: dates, y: avgTemp, name: '평균', type: 'scatter', mode: 'lines', line: {color: '#00b4d8', width: 4}, fill: 'tonexty', fillcolor: 'rgba(0, 180, 216, 0.1)' },
+            { x: dates, y: minTemp, name: '최저', type: 'scatter', mode: 'lines+markers', line: {color: '#06d6a0', width: 1}, marker: {size: 4} }
+        ], { ...layoutBase, title: '🌡️ 기온 변화 추이 (°C)' });
+
+        // 2. 강수량 그래프
+        Plotly.newPlot('rain-chart', [
+            { x: dates, y: rains, type: 'bar', marker: {color: '#4cc9f0'}, name: '강수량' }
+        ], { ...layoutBase, title: '🌧️ 일강수량 (mm)' });
+
+        // 3. 습도 및 풍속
+        Plotly.newPlot('hum-wind-chart', [
+            { x: dates, y: hums, name: '습도 (%)', type: 'scatter', line: {color: '#ffd166', dash: 'dot'} },
+            { x: dates, y: winds, name: '풍속 (m/s)', yaxis: 'y2', type: 'scatter', mode: 'lines+markers', line: {color: '#ef476f'} }
+        ], { 
+            ...layoutBase, 
+            title: '🌬️ 습도 및 풍속',
+            yaxis2: { title: '풍속', overlaying: 'y', side: 'right', showgrid: false }
+        });
+    }
+
+    fetchData();
+</script>
+</body>
+</html>
