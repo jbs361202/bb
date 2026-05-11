@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>충청북도 날씨 현황 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0d1b2a;color:#e0e8f0;font-family:'Noto Sans KR',sans-serif;min-height:100vh;padding:24px}
+
+  .header{margin-bottom:20px}
+  .header h1{font-size:18px;font-weight:700;letter-spacing:-.3px}
+  .header p{font-size:12px;color:#7a9bbf;margin-top:4px}
+  .api-badge{display:inline-block;background:#1b2b3b;border:1px solid #2e4057;border-radius:4px;
+    font-size:10px;padding:2px 8px;color:#7a9bbf;margin-top:6px;font-family:monospace}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:#1b2b3b;border-radius:10px;padding:16px 18px;border-left:3px solid;
+    transition:transform .15s}
+  .kpi:hover{transform:translateY(-2px)}
+  .kpi-label{font-size:11px;color:#7a9bbf;margin-bottom:8px}
+  .kpi-val{font-size:24px;font-weight:700;letter-spacing:-.5px}
+  .kpi-unit{font-size:13px;font-weight:400;margin-left:2px}
+
+  .row{display:grid;gap:12px;margin-bottom:12px}
+  .row-3-1{grid-template-columns:3fr 1.4fr}
+  .row-2-2{grid-template-columns:1fr 1fr}
+
+  .card{background:#1b2b3b;border-radius:10px;padding:16px 18px}
+  .card-title{font-size:11px;font-weight:500;color:#7a9bbf;margin-bottom:10px;
+    text-transform:uppercase;letter-spacing:.08em}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;font-size:10px;color:#7a9bbf}
+  .ld{width:10px;height:10px;border-radius:2px;display:inline-block;
+    margin-right:4px;vertical-align:middle}
+
+  .chart-wrap{position:relative}
+
+  .meta{font-size:10px;color:#4a6a8a;text-align:center;margin-top:16px;padding-top:12px;
+    border-top:1px solid #1b2b3b}
+
+  @media(max-width:700px){
+    .kpi-grid{grid-template-columns:repeat(2,1fr)}
+    .row-3-1,.row-2-2{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>충청북도 날씨 현황 대시보드</h1>
+  <p>공공데이터 포털 API 시각화 &nbsp;·&nbsp; 데모 데이터 (2018-07 ~ 2020-03)</p>
+  <span class="api-badge">api.odcloud.kr / 15029361 / v1</span>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi" style="border-left-color:#00b4d8">
+    <div class="kpi-label">평균 기온</div>
+    <div class="kpi-val" style="color:#00b4d8"><span id="kv1">—</span><span class="kpi-unit">°C</span></div>
+  </div>
+  <div class="kpi" style="border-left-color:#f77f00">
+    <div class="kpi-label">최고 기온</div>
+    <div class="kpi-val" style="color:#f77f00"><span id="kv2">—</span><span class="kpi-unit">°C</span></div>
+  </div>
+  <div class="kpi" style="border-left-color:#06d6a0">
+    <div class="kpi-label">총 강수량</div>
+    <div class="kpi-val" style="color:#06d6a0"><span id="kv3">—</span><span class="kpi-unit">mm</span></div>
+  </div>
+  <div class="kpi" style="border-left-color:#ffd166">
+    <div class="kpi-label">평균 습도</div>
+    <div class="kpi-val" style="color:#ffd166"><span id="kv4">—</span><span class="kpi-unit">%</span></div>
+  </div>
+</div>
+
+<div class="row row-3-1">
+  <div class="card">
+    <div class="card-title">일별 기온 추이</div>
+    <div class="legend">
+      <span><span class="ld" style="background:#00b4d8"></span>평균기온</span>
+      <span><span class="ld" style="background:#f77f00"></span>최고기온</span>
+      <span><span class="ld" style="background:#06d6a0"></span>최저기온</span>
+    </div>
+    <div class="chart-wrap" style="height:200px"><canvas id="tempChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">월별 평균 기온</div>
+    <div class="chart-wrap" style="height:224px"><canvas id="monthChart"></canvas></div>
+  </div>
+</div>
+
+<div class="row row-2-2">
+  <div class="card">
+    <div class="card-title">일별 강수량</div>
+    <div class="legend"><span><span class="ld" style="background:#06d6a0"></span>강수량 (mm)</span></div>
+    <div class="chart-wrap" style="height:160px"><canvas id="precipChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">평균 습도 &amp; 풍속</div>
+    <div class="legend">
+      <span><span class="ld" style="background:#ffd166"></span>습도 (%)</span>
+      <span><span class="ld" style="background:#ef476f"></span>풍속 (m/s)</span>
+    </div>
+    <div class="chart-wrap" style="height:160px"><canvas id="humWindChart"></canvas></div>
+  </div>
+</div>
+
+<p class="meta" id="metaLine">생성 중…</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){
+  /* ── 데모 데이터 생성 ───────────────────────── */
+  const seed=s=>{let x=s;return()=>{x=Math.sin(x)*10000;return x-Math.floor(x);}};
+  const rng=seed(42);
+  const rand=(a,b)=>a+(b-a)*rng();
+  const randn=()=>{let u=0,v=0;
+    while(!u)u=rng();while(!v)v=rng();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+
+  const days=[];
+  for(let d=new Date('2018-07-01');d<=new Date('2020-03-31');d.setDate(d.getDate()+1))
+    days.push(new Date(d));
+  const n=days.length;
+
+  const data=days.map(d=>{
+    const mo=d.getMonth()+1;
+    const base=12+14*Math.sin((mo-4)*Math.PI/6);
+    const avg=+(base+randn()*2).toFixed(1);
+    return{date:d,avg,
+      mx:+(avg+rand(3,7)).toFixed(1),
+      mn:+(avg-rand(3,7)).toFixed(1),
+      pr:rng()<.2?+(-Math.log(rng())*8).toFixed(1):0,
+      wi:+rand(.5,5).toFixed(1),
+      hu:+(60+20*Math.sin((mo-7)*Math.PI/6)+randn()*5).toFixed(1)};
+  });
+
+  /* ── KPI 채우기 ─────────────────────────────── */
+  const mean=(k)=>(data.reduce((s,r)=>s+r[k],0)/n).toFixed(1);
+  document.getElementById('kv1').textContent=mean('avg');
+  document.getElementById('kv2').textContent=Math.max(...data.map(r=>r.mx)).toFixed(1);
+  document.getElementById('kv3').textContent=
+    Math.round(data.reduce((s,r)=>s+r.pr,0)).toLocaleString();
+  document.getElementById('kv4').textContent=mean('hu');
+  document.getElementById('metaLine').textContent=
+    '데이터 기간: 2018-07-01 ~ 2020-03-31  |  총 '+n.toLocaleString()+
+    '건  |  생성: '+new Date().toLocaleString('ko-KR');
+
+  /* ── 공통 차트 설정 ─────────────────────────── */
+  const gc='rgba(255,255,255,.07)', tc='#4a6a8a';
+  const tip={backgroundColor:'#0d1b2a',titleColor:'#e0e8f0',
+    bodyColor:'#7a9bbf',borderColor:'#2e4057',borderWidth:1};
+
+  const xScale={ticks:{color:tc,font:{size:9},maxTicksLimit:10,maxRotation:30},
+    grid:{color:gc}};
+  const yScale=(lbl)=>({ticks:{color:tc,font:{size:9}},grid:{color:gc},
+    ...(lbl?{title:{display:true,text:lbl,color:tc,font:{size:9}}}:{})});
+
+  /* ── 샘플링 (7일 간격) ──────────────────────── */
+  const sm=data.filter((_,i)=>i%7===0);
+  const lbs=sm.map(r=>r.date.toISOString().slice(0,10));
+
+  /* ── 기온 시계열 ─────────────────────────────── */
+  new Chart(document.getElementById('tempChart'),{
+    type:'line',
+    data:{labels:lbs,datasets:[
+      {label:'평균기온',data:sm.map(r=>r.avg),borderColor:'#00b4d8',
+        borderWidth:2,pointRadius:0,tension:.35,fill:false},
+      {label:'최고기온',data:sm.map(r=>r.mx),borderColor:'#f77f00',
+        borderWidth:1,pointRadius:0,tension:.35,fill:false,borderDash:[5,3]},
+      {label:'최저기온',data:sm.map(r=>r.mn),borderColor:'#06d6a0',
+        borderWidth:1,pointRadius:0,tension:.35,fill:false,borderDash:[2,3]},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,mode:'index',intersect:false}},
+      scales:{x:xScale,y:yScale('기온 (°C)')}}
+  });
+
+  /* ── 월별 평균 기온 ──────────────────────────── */
+  const mm={};const mo=[];
+  data.forEach(r=>{const k=r.date.toISOString().slice(0,7);
+    if(!mm[k]){mm[k]={s:0,c:0};mo.push(k);}mm[k].s+=r.avg;mm[k].c++;});
+  const mv=mo.map(k=>(mm[k].s/mm[k].c).toFixed(1));
+  const mc=mv.map(v=>+v>=20?'#f77f00':+v>=10?'#06d6a0':'#00b4d8');
+
+  new Chart(document.getElementById('monthChart'),{
+    type:'bar',
+    data:{labels:mo,datasets:[{data:mv,backgroundColor:mc,borderRadius:3,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>c.raw+' °C'}}},
+      scales:{x:{ticks:{color:tc,font:{size:8},maxRotation:45},grid:{color:gc}},
+        y:yScale('기온 (°C)')}}
+  });
+
+  /* ── 강수량 ──────────────────────────────────── */
+  new Chart(document.getElementById('precipChart'),{
+    type:'bar',
+    data:{labels:lbs,datasets:[{data:sm.map(r=>r.pr),
+      backgroundColor:'rgba(6,214,160,.65)',borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip}},
+      scales:{x:xScale,y:yScale('강수량 (mm)')}}
+  });
+
+  /* ── 습도 & 풍속 이중 축 ─────────────────────── */
+  new Chart(document.getElementById('humWindChart'),{
+    type:'line',
+    data:{labels:lbs,datasets:[
+      {label:'습도',data:sm.map(r=>r.hu),borderColor:'#ffd166',
+        borderWidth:1.5,pointRadius:0,tension:.35,fill:false,yAxisID:'y'},
+      {label:'풍속',data:sm.map(r=>r.wi),borderColor:'#ef476f',
+        borderWidth:1.2,pointRadius:0,tension:.35,fill:false,yAxisID:'y2',borderDash:[4,3]},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,mode:'index',intersect:false}},
+      scales:{
+        x:xScale,
+        y:{...yScale('습도 (%)'),position:'left'},
+        y2:{...yScale('풍속 (m/s)'),position:'right',grid:{drawOnChartArea:false}}
+      }}
+  });
+})();
+</script>
+</body>
+</html>
